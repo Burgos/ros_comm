@@ -384,18 +384,30 @@ void AesCbcEncryptor::buildSymmetricKey() {
 
 int AesCbcEncryptor::encryptData(unsigned char* dst, const unsigned char* src,
         int src_size, const std::basic_string<unsigned char>& iv) {
-    EVP_EncryptInit(&ctx_, EVP_aes_128_cbc(),
+
+    int ret = EVP_EncryptInit(&ctx_, EVP_aes_128_cbc(),
             &symmetric_key_[0], &iv[0]);
-    EVP_CIPHER_CTX_set_padding(&ctx_, 0);
+    if (ret != 1)
+        throw BagException("Failed to init encryptor");
+
+    ret = EVP_CIPHER_CTX_set_padding(&ctx_, 0);
+    if (ret != 1)
+        throw BagException("Failed to config encryptor");
 
     int encrypted_written = 0;
     int len;
 
-    EVP_EncryptUpdate(&ctx_, dst, &len,
+    ret = EVP_EncryptUpdate(&ctx_, dst, &len,
             src, src_size);
+    if (ret != 1)
+        throw BagException("Failed to update encryptor");
+
     encrypted_written += len;
-    EVP_EncryptFinal_ex(&ctx_, dst + len,
-            &len);
+
+    ret = EVP_EncryptFinal_ex(&ctx_, dst + len, &len);
+    if (ret != 1)
+        throw BagException("Failed to finalize encryptor");
+
     encrypted_written += len;
 
     return encrypted_written;
@@ -403,16 +415,26 @@ int AesCbcEncryptor::encryptData(unsigned char* dst, const unsigned char* src,
 
 int AesCbcEncryptor::decryptData(unsigned char* dst, const unsigned char* src, int src_size,
         const std::basic_string<unsigned char>& iv) {
-    EVP_DecryptInit(&ctx_, EVP_aes_128_cbc(),
+
+    int ret = EVP_DecryptInit(&ctx_, EVP_aes_128_cbc(),
             &symmetric_key_[0], &iv[0]);
+    if (ret != 1)
+        throw BagException("Failed to init decryptor");
 
     int decrypted_written = 0;
     int len;
-    EVP_DecryptUpdate(&ctx_, dst, &len, src, src_size);
-    decrypted_written += len;
-    EVP_DecryptFinal_ex(&ctx_, dst + len, &len);
+
+    ret = EVP_DecryptUpdate(&ctx_, dst, &len, src, src_size);
+    if (ret != 1)
+        throw BagException("Failed to update decryptor");
+
     decrypted_written += len;
 
+    ret = EVP_DecryptFinal_ex(&ctx_, dst + len, &len);
+    if (ret != 1)
+        throw BagException("Failed to finalize decryptor");
+
+    decrypted_written += len;
     return decrypted_written;
 }
 
