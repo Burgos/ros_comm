@@ -45,6 +45,7 @@
 #include <string>
 
 #include <boost/function.hpp>
+#include <openssl/evp.h>
 
 #ifndef _WIN32
   #include <gpgme.h>
@@ -186,6 +187,10 @@ public:
 
 private:
     void buildSymmetricKey();
+    int encryptData(unsigned char* dst, const unsigned char* src, int src_size,
+           const std::basic_string<unsigned char>& iv);
+    int decryptData(unsigned char* dst, const unsigned char* src, int src_size,
+           const std::basic_string<unsigned char>& iv);
 
 private:
     // User name of GPG key used for symmetric key encryption
@@ -197,6 +202,9 @@ private:
     // AES keys for encryption/decryption
     AES_KEY aes_encrypt_key_;
     AES_KEY aes_decrypt_key_;
+
+    // EVP context
+    EVP_CIPHER_CTX ctx_;
 };
 #endif
 }

@@ -228,10 +228,11 @@ void AesCbcEncryptor::initialize(Bag const& bag, std::string const& gpg_key_user
     if (gpg_key_user_ == gpg_key_user) {
         return;
     }
+
     if (gpg_key_user_.empty()) {
         gpg_key_user_ = gpg_key_user;
         buildSymmetricKey();
-        AES_set_encrypt_key(&symmetric_key_[0], AES_BLOCK_SIZE*8, &aes_encrypt_key_);
+        EVP_CIPHER_CTX_init(&ctx_);
     } else {
         // Encryption user cannot change once set
         throw BagException(
@@ -255,10 +256,13 @@ uint32_t AesCbcEncryptor::encryptChunk(const uint32_t chunk_size, const uint64_t
     }
     file.seek(chunk_data_pos);
     file.write((char*) &iv[0], AES_BLOCK_SIZE);
-    AES_cbc_encrypt(&compressed_chunk[0], &encrypted_chunk[0], encrypted_chunk.length(), &aes_encrypt_key_, &iv[0], AES_ENCRYPT);
+
+    int encrypted_written = encryptData(&encrypted_chunk[0],
+            &compressed_chunk[0], compressed_chunk.length(), iv);
+
     // Write encrypted chunk
-    file.write((char*) &encrypted_chunk[0], encrypted_chunk.length());
-    file.truncate(chunk_data_pos + AES_BLOCK_SIZE + encrypted_chunk.length());
+    file.write((char*) &encrypted_chunk[0], encrypted_written);
+    file.truncate(chunk_data_pos + AES_BLOCK_SIZE + encrypted_written);
     return AES_BLOCK_SIZE + encrypted_chunk.length();
 }
 
@@ -276,13 +280,17 @@ void AesCbcEncryptor::decryptChunk(ChunkHeader const& chunk_header, Buffer& decr
     std::basic_string<unsigned char> encrypted_chunk(chunk_header.compressed_size - AES_BLOCK_SIZE, 0);
     file.read((char*) &encrypted_chunk[0], chunk_header.compressed_size - AES_BLOCK_SIZE);
     // Decrypt chunk
+
     decrypted_chunk.setSize(chunk_header.compressed_size - AES_BLOCK_SIZE);
-    AES_cbc_encrypt(&encrypted_chunk[0], (unsigned char*) decrypted_chunk.getData(), chunk_header.compressed_size - AES_BLOCK_SIZE,
-        &aes_decrypt_key_, &iv[0], AES_DECRYPT);
+
+    int decrypted_written = decryptData(decrypted_chunk.getData(),
+            &encrypted_chunk[0], chunk_header.compressed_size - AES_BLOCK_SIZE,
+            iv);
+
     if (decrypted_chunk.getSize() == 0) {
         throw BagFormatException("Decrypted chunk is empty");
     }
-    decrypted_chunk.setSize(decrypted_chunk.getSize() - *(decrypted_chunk.getData()+decrypted_chunk.getSize()-1));
+    decrypted_chunk.setSize(decrypted_written);
 }
 
 void AesCbcEncryptor::addFieldsToFileHeader(ros::M_string &header_fields) const {
@@ -301,7 +309,6 @@ void AesCbcEncryptor::readFieldsFromFileHeader(ros::M_string const& header_field
         throw BagFormatException("GPG key user is not found in header");
     }
     symmetric_key_ = decryptStringGpg(gpg_key_user_, encrypted_symmetric_key_);
-    AES_set_decrypt_key(&symmetric_key_[0], AES_BLOCK_SIZE*8, &aes_decrypt_key_);
 }
 
 void AesCbcEncryptor::writeEncryptedHeader(boost::function<void(ros::M_string const&)>, ros::M_string const& header_fields, ChunkedFile& file) {
@@ -323,9 +330,12 @@ void AesCbcEncryptor::writeEncryptedHeader(boost::function<void(ros::M_string co
     file.write((char*) &encrypted_buffer_size, 4);
     encrypted_buffer_size -= AES_BLOCK_SIZE;
     file.write((char*) &iv[0], AES_BLOCK_SIZE);
-    AES_cbc_encrypt(&header_buffer_with_pad[0], &encrypted_buffer[0], encrypted_buffer_size, &aes_encrypt_key_, &iv[0], AES_ENCRYPT);
+
+    int encrypted_written = encryptData(&encrypted_buffer[0],
+            &header_buffer_with_pad[0], encrypted_buffer_size, iv);
+
     // Write
-    file.write((char*) &encrypted_buffer[0], encrypted_buffer_size);
+    file.write((char*) &encrypted_buffer[0], encrypted_written);
 }
 
 bool AesCbcEncryptor::readEncryptedHeader(boost::function<bool(ros::Header&)>, ros::Header& header, Buffer& header_buffer, ChunkedFile& file) {
@@ -346,11 +356,14 @@ bool AesCbcEncryptor::readEncryptedHeader(boost::function<bool(ros::Header&)>, r
     file.read((char*) &encrypted_header[0], encrypted_header_len);
     // Decrypt header
     header_buffer.setSize(encrypted_header_len);
-    AES_cbc_encrypt(&encrypted_header[0], (unsigned char*) header_buffer.getData(), encrypted_header_len, &aes_decrypt_key_, &iv[0], AES_DECRYPT);
     if (header_buffer.getSize() == 0) {
         throw BagFormatException("Decrypted header is empty");
     }
-    header_buffer.setSize(header_buffer.getSize() - *(header_buffer.getData()+header_buffer.getSize()-1));
+
+    int decrypted_written = decryptData(header_buffer.getData(),
+            &encrypted_header[0], encrypted_header_len, iv);
+
+    header_buffer.setSize(decrypted_written);
     // Parse the header
     std::string error_msg;
     return header.parse(header_buffer.getData(), header_buffer.getSize(), error_msg);
@@ -367,6 +380,40 @@ void AesCbcEncryptor::buildSymmetricKey() {
     }
     // Encrypted session key is written in bag file header
     encrypted_symmetric_key_ = encryptStringGpg(gpg_key_user_, symmetric_key_);
+}
+
+int AesCbcEncryptor::encryptData(unsigned char* dst, const unsigned char* src,
+        int src_size, const std::basic_string<unsigned char>& iv) {
+    EVP_EncryptInit(&ctx_, EVP_aes_128_cbc(),
+            &symmetric_key_[0], &iv[0]);
+    EVP_CIPHER_CTX_set_padding(&ctx_, 0);
+
+    int encrypted_written = 0;
+    int len;
+
+    EVP_EncryptUpdate(&ctx_, dst, &len,
+            src, src_size);
+    encrypted_written += len;
+    EVP_EncryptFinal_ex(&ctx_, dst + len,
+            &len);
+    encrypted_written += len;
+
+    return encrypted_written;
+}
+
+int AesCbcEncryptor::decryptData(unsigned char* dst, const unsigned char* src, int src_size,
+        const std::basic_string<unsigned char>& iv) {
+    EVP_DecryptInit(&ctx_, EVP_aes_128_cbc(),
+            &symmetric_key_[0], &iv[0]);
+
+    int decrypted_written = 0;
+    int len;
+    EVP_DecryptUpdate(&ctx_, dst, &len, src, src_size);
+    decrypted_written += len;
+    EVP_DecryptFinal_ex(&ctx_, dst + len, &len);
+    decrypted_written += len;
+
+    return decrypted_written;
 }
 
 }  // namespace rosbag
