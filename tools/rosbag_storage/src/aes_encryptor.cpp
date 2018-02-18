@@ -262,7 +262,7 @@ uint32_t AesCbcEncryptor::encryptChunk(const uint32_t chunk_size, const uint64_t
     return AES_BLOCK_SIZE + encrypted_chunk.length();
 }
 
-void AesCbcEncryptor::decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) const {
+void AesCbcEncryptor::decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) {
     // Test encrypted chunk size
     if (chunk_header.compressed_size % AES_BLOCK_SIZE != 0) {
         throw BagFormatException((boost::format("Error in encrypted chunk size: %d") % chunk_header.compressed_size).str());

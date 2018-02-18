@@ -92,7 +92,7 @@ public:
      *
      * This method reads the encrypted chunk from file stream, decrypts, and writes it to decrypted_chunk.
      */
-    virtual void decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) const = 0;
+    virtual void decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) = 0;
 
     //! Add encryptor information to bag file header
     /*!
@@ -141,7 +141,7 @@ public:
 
     void initialize(Bag const&, std::string const&) { }
     uint32_t encryptChunk(const uint32_t, const uint64_t, ChunkedFile&);
-    void decryptChunk(ChunkHeader const&, Buffer&, ChunkedFile&) const;
+    void decryptChunk(ChunkHeader const&, Buffer&, ChunkedFile&);
     void addFieldsToFileHeader(ros::M_string&) const { }
     void readFieldsFromFileHeader(ros::M_string const&) { }
     void writeEncryptedHeader(boost::function<void(ros::M_string const&)>, ros::M_string const&, ChunkedFile&);
@@ -178,7 +178,7 @@ public:
 
     void initialize(Bag const& bag, std::string const& gpg_key_user);
     uint32_t encryptChunk(const uint32_t chunk_size, const uint64_t chunk_data_pos, ChunkedFile& file);
-    void decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) const;
+    void decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file);
     void addFieldsToFileHeader(ros::M_string& header_fields) const;
     void readFieldsFromFileHeader(ros::M_string const& header_fields);
     void writeEncryptedHeader(boost::function<void(ros::M_string const&)>, ros::M_string const& header_fields, ChunkedFile&);

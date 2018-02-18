@@ -43,7 +43,7 @@ namespace rosbag
 
 uint32_t NoEncryptor::encryptChunk(const uint32_t chunk_size, const uint64_t, ChunkedFile&) { return chunk_size; }
 
-void NoEncryptor::decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) const {
+void NoEncryptor::decryptChunk(ChunkHeader const& chunk_header, Buffer& decrypted_chunk, ChunkedFile& file) {
     decrypted_chunk.setSize(chunk_header.compressed_size);
     file.read((char*) decrypted_chunk.getData(), chunk_header.compressed_size);
 }
