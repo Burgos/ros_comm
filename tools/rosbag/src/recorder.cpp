@@ -100,6 +100,8 @@ RecorderOptions::RecorderOptions() :
     snapshot(false),
     verbose(false),
     compression(compression::Uncompressed),
+    encryption("rosbag/NoEncryptor"),
+    encryption_param("*"),
     prefix(""),
     name(""),
     exclude_regex(),
@@ -380,6 +382,7 @@ void Recorder::snapshotTrigger(std_msgs::Empty::ConstPtr trigger) {
 
 void Recorder::startWriting() {
     bag_.setCompression(options_.compression);
+    bag_.setEncryptorPlugin(options_.encryption, options_.encryption_param);
     bag_.setChunkThreshold(options_.chunk_size);
 
     updateFilenames();

@@ -97,6 +97,8 @@ struct ROSBAG_DECL RecorderOptions
     bool            snapshot;
     bool            verbose;
     CompressionType compression;
+    std::string     encryption;
+    std::string     encryption_param;
     std::string     prefix;
     std::string     name;
     boost::regex    exclude_regex;
