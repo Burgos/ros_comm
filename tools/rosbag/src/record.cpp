@@ -66,8 +66,9 @@ rosbag::RecorderOptions parseOptions(int argc, char** argv) {
       ("topic", po::value< std::vector<std::string> >(), "topic to record")
       ("size", po::value<uint64_t>(), "The maximum size of the bag to record in MB.")
       ("duration", po::value<std::string>(), "Record a bag of maximum duration in seconds, unless 'm', or 'h' is appended.")
-      ("node", po::value<std::string>(), "Record all topics subscribed to by a specific node.");
-
+      ("node", po::value<std::string>(), "Record all topics subscribed to by a specific node.")
+      ("encryption", po::value<std::string>(), "Encryption plugin to use.")
+      ("encryption-param", po::value<std::string>(), "Parameter to the encryption plugin");
   
     po::positional_options_description p;
     p.add("topic", -1);
@@ -258,6 +259,25 @@ rosbag::RecorderOptions parseOptions(int argc, char** argv) {
         fprintf(stderr, "Warning: Exclusion regex given, but no topics to subscribe to.\n"
                 "Adding implicit 'record all'.");
         opts.record_all = true;
+    }
+
+    bool encryption_set = false;
+    if (vm.count("encryption"))
+    {
+        opts.encryption = vm["encryption"].as<std::string>();
+        std::cout << "Using " << opts.encryption << " encryption plugin." << std::endl;
+        encryption_set = true;
+    }
+
+    if (vm.count("encryption-param"))
+    {
+        if (!encryption_set)
+        {
+            throw ros::Exception("Can only set encryption params if encryption is set.");
+        }
+
+        opts.encryption_param = vm["encryption-param"].as<std::string>();
+        std::cout << "Using " << opts.encryption_param << " as encryption plugin param." << std::endl;
     }
 
     return opts;
